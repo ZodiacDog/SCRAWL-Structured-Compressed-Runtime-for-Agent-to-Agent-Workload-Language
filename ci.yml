@@ -1,0 +1,74 @@
+name: SCRAWL CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Display Python version
+      run: python --version
+
+    - name: Run SCRAWL Core Tests (360 tests)
+      run: python tests/test_scrawl.py
+
+    - name: Run FLUX/SCRAWL Tests (116 tests)
+      run: python flux_scrawl_tests.py
+
+    - name: Run SCRAWL v1.1 Feature Tests (76 tests)
+      run: python tests/test_v11.py
+
+    - name: Run Examples
+      run: |
+        python examples/heartbeat.py
+        python examples/consensus_vote.py
+        python examples/delta_state_sync.py
+        python examples/fused_attention.py
+
+    - name: Verify zero external dependencies
+      run: |
+        python -c "
+        import ast, os, sys
+        stdlib = set(sys.stdlib_module_names)
+        violations = []
+        for root, dirs, files in os.walk('src'):
+            for f in files:
+                if f.endswith('.py'):
+                    path = os.path.join(root, f)
+                    with open(path) as fh:
+                        tree = ast.parse(fh.read())
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.Import):
+                            for alias in node.names:
+                                mod = alias.name.split('.')[0]
+                                if mod not in stdlib and mod not in ('src',):
+                                    violations.append(f'{path}: {mod}')
+                        elif isinstance(node, ast.ImportFrom) and node.module:
+                            mod = node.module.split('.')[0]
+                            if mod not in stdlib and mod not in ('src',):
+                                violations.append(f'{path}: {mod}')
+        if violations:
+            print('EXTERNAL DEPENDENCY VIOLATIONS:')
+            for v in violations:
+                print(f'  {v}')
+            sys.exit(1)
+        else:
+            print('Zero external dependencies verified.')
+        "
