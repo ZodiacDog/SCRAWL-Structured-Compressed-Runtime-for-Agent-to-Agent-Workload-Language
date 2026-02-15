@@ -42,6 +42,9 @@ jobs:
         python examples/delta_state_sync.py
         python examples/fused_attention.py
 
+    - name: Run Benchmarks (quick mode)
+      run: python benchmarks/bench_scrawl.py --quick
+
     - name: Verify zero external dependencies
       run: |
         python -c "
